@@ -1,33 +1,78 @@
+import os
+import subprocess
+import yaml
 import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
+from dotenv import load_dotenv
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+load_dotenv() 
 
 DATA_PATH = "data/raw/credit_default.csv"
-MODEL_PATH = "models/model.joblib"
+MODEL_NAME = "credit-default-model"
+
+def get_git_commit():
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+    except Exception:
+        return "unknown"
+
+def get_dvc_data_version():
+    try:
+        with open(f"{DATA_PATH}.dvc") as f:
+            content = yaml.safe_load(f)
+            return content["outs"][0]["md5"]
+    except Exception:
+        return "unknown"
 
 def main():
+
+    with open("ml/params.yaml") as f:
+        params = yaml.safe_load(f)["train"]
+
     df = pd.read_csv(DATA_PATH)
     X = df.drop(columns=["default_next_month"])
     y = df["default_next_month"]
-
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=params["test_size"],
+        random_state=params["random_state"], stratify=y
     )
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    mlflow.set_experiment("credit-default")
 
-    preds = model.predict(X_test)
-    acc = accuracy_score(y_test, preds)
-    f1 = f1_score(y_test, preds)
-    print(f"Accuracy: {acc:.4f}  |  F1: {f1:.4f}")
+    with mlflow.start_run() as run:
 
-    import os
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
-    print(f"Modèle sauvegardé : {MODEL_PATH}")
+        model = RandomForestClassifier(
+            n_estimators=params["n_estimators"],
+            max_depth=params["max_depth"],
+            random_state=params["random_state"],
+            n_jobs=-1,
+        )
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        metrics = {
+            "accuracy": accuracy_score(y_test, preds),
+            "f1": f1_score(y_test, preds),
+            "precision": precision_score(y_test, preds),
+            "recall": recall_score(y_test, preds),
+        }
+
+        mlflow.log_params(params)
+        mlflow.log_metrics(metrics)
+        mlflow.set_tag("git_commit", get_git_commit())
+        mlflow.set_tag("dvc_data_version", get_dvc_data_version())
+        mlflow.sklearn.log_model(
+            model, artifact_path="model", registered_model_name=MODEL_NAME
+        )
+
+        print(f"Run ID: {run.info.run_id}")
+        print(f"Metrics: {metrics}")
+        print("Modèle enregistré dans le registry MLflow.")
 
 if __name__ == "__main__":
     main()
