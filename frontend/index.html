@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Credit Default Predictor</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    textarea { width: 100%; height: 200px; font-family: monospace; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+    #result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Credit Default Predictor</h1>
+  <p>Entrez les features du client (JSON) :</p>
+  <textarea id="features">{
+  "LIMIT_BAL": 20000, "SEX": 2, "EDUCATION": 2, "MARRIAGE": 1,
+  "AGE": 24, "PAY_0": 2, "PAY_2": 2, "PAY_3": -1, "PAY_4": -1,
+  "PAY_5": -2, "PAY_6": -2, "BILL_AMT1": 3913, "BILL_AMT2": 3102,
+  "BILL_AMT3": 689, "BILL_AMT4": 0, "BILL_AMT5": 0, "BILL_AMT6": 0,
+  "PAY_AMT1": 0, "PAY_AMT2": 689, "PAY_AMT3": 0, "PAY_AMT4": 0,
+  "PAY_AMT5": 0, "PAY_AMT6": 0
+}</textarea>
+  <br>
+  <button onclick="predict()">Prédire</button>
+  <div id="result"></div>
+
+  <script>
+    const API_URL = "http://localhost:8000";
+
+    async function predict() {
+      const result = document.getElementById("result");
+      result.textContent = "Chargement...";
+      try {
+        const features = JSON.parse(document.getElementById("features").value);
+        const resp = await fetch(`${API_URL}/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ features })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Erreur");
+        result.innerHTML = `
+          <strong>Prédiction :</strong> ${data.prediction === 1 ? "⚠️ Défaut probable" : "✅ Pas de défaut"}<br>
+          <strong>Probabilité de défaut :</strong> ${(data.probability * 100).toFixed(1)}%
+        `;
+      } catch (e) {
+        result.textContent = "Erreur : " + e.message;
+      }
+    }
+  </script>
+</body>
+</html>
