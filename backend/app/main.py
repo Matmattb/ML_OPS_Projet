@@ -12,6 +12,17 @@ from app.monitoring import (
     prediction_failures_total,
     get_metrics,
 )
+import os
+from fastapi import Request, HTTPException
+
+METRICS_TOKEN = os.environ.get("METRICS_TOKEN", "")
+
+def verify_metrics_token(request: Request):
+    auth = request.headers.get("Authorization", "")
+    expected = f"Bearer {METRICS_TOKEN}"
+    if not METRICS_TOKEN or auth != expected:
+        raise HTTPException(status_code=401, detail="Non autorisé")
+
 app = FastAPI(title="Credit Default API")
 
 app.add_middleware(
@@ -61,7 +72,9 @@ def predict(payload: PredictionInput):
         prediction_failures_total.inc()  # échec
         raise HTTPException(status_code=500, detail=str(e))
     
+from fastapi import Depends
+
 @app.get("/metrics")
-def metrics():
+def metrics(_: None = Depends(verify_metrics_token)):
     data, content_type = get_metrics()
     return Response(content=data, media_type=content_type)
