@@ -1,0 +1,23 @@
+# --- ML & données ---
+pandas
+scikit-learn
+openpyxl
+xlrd
+joblib
+pyyaml
+
+# --- Data versioning ---
+dvc[s3]
+
+# --- Experiment tracking & registry ---
+mlflow
+python-dotenv
+
+# --- Backend (API) ---
+fastapi
+uvicorn[standard]
+pydantic
+
+# --- Tests ---
+pytest
+httpx
